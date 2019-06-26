@@ -105,8 +105,6 @@ var (
 const (
 	// CRDConversionWebhook image
 	CRDConversionWebhook = iota
-	// AdmissionWebhook image
-	AdmissionWebhook
 	// Agnhost image
 	Agnhost
 	// Alpine image
@@ -143,6 +141,10 @@ const (
 	GBFrontend
 	// GBRedisSlave image
 	GBRedisSlave
+	// Httpd image
+	Httpd
+	// HttpdNew image
+	HttpdNew
 	// InClusterClient image
 	InClusterClient
 	// Invalid image
@@ -163,12 +165,6 @@ const (
 	MounttestUser
 	// Nautilus image
 	Nautilus
-	// Net image
-	Net
-	// Netexec image
-	Netexec
-	// Nettest image
-	Nettest
 	// Nginx image
 	Nginx
 	// NginxNew image
@@ -217,8 +213,7 @@ const (
 func initImageConfigs() map[int]Config {
 	configs := map[int]Config{}
 	configs[CRDConversionWebhook] = Config{e2eRegistry, "crd-conversion-webhook", "1.13rev2"}
-	configs[AdmissionWebhook] = Config{e2eRegistry, "webhook", "1.15v1"}
-	configs[Agnhost] = Config{e2eRegistry, "agnhost", "2.0"}
+	configs[Agnhost] = Config{e2eRegistry, "agnhost", "2.1"}
 	configs[Alpine] = Config{dockerLibraryRegistry, "alpine", "3.7"}
 	configs[AuthenticatedAlpine] = Config{gcAuthenticatedRegistry, "alpine", "3.7"}
 	configs[APIServer] = Config{e2eRegistry, "sample-apiserver", "1.10"}
@@ -235,6 +230,8 @@ func initImageConfigs() map[int]Config {
 	configs[Etcd] = Config{gcRegistry, "etcd", "3.3.10"}
 	configs[GBFrontend] = Config{sampleRegistry, "gb-frontend", "v6"}
 	configs[GBRedisSlave] = Config{sampleRegistry, "gb-redisslave", "v3"}
+	configs[Httpd] = Config{dockerLibraryRegistry, "httpd", "2.4.38-alpine"}
+	configs[HttpdNew] = Config{dockerLibraryRegistry, "httpd", "2.4.39-alpine"}
 	configs[InClusterClient] = Config{e2eRegistry, "inclusterclient", "1.0"}
 	configs[Invalid] = Config{gcRegistry, "invalid-image", "invalid-tag"}
 	configs[InvalidRegistryImage] = Config{invalidRegistry, "alpine", "3.1"}
@@ -245,9 +242,6 @@ func initImageConfigs() map[int]Config {
 	configs[Mounttest] = Config{e2eRegistry, "mounttest", "1.0"}
 	configs[MounttestUser] = Config{e2eRegistry, "mounttest-user", "1.0"}
 	configs[Nautilus] = Config{e2eRegistry, "nautilus", "1.0"}
-	configs[Net] = Config{e2eRegistry, "net", "1.0"}
-	configs[Netexec] = Config{e2eRegistry, "netexec", "1.1"}
-	configs[Nettest] = Config{e2eRegistry, "nettest", "1.0"}
 	configs[Nginx] = Config{dockerLibraryRegistry, "nginx", "1.14-alpine"}
 	configs[NginxNew] = Config{dockerLibraryRegistry, "nginx", "1.15-alpine"}
 	configs[Nonewprivs] = Config{e2eRegistry, "nonewprivs", "1.0"}
@@ -258,7 +252,7 @@ func initImageConfigs() map[int]Config {
 	configs[Porter] = Config{e2eRegistry, "porter", "1.0"}
 	configs[PrometheusDummyExporter] = Config{e2eRegistry, "prometheus-dummy-exporter", "v0.1.0"}
 	configs[PrometheusToSd] = Config{e2eRegistry, "prometheus-to-sd", "v0.5.0"}
-	configs[Redis] = Config{e2eRegistry, "redis", "1.0"}
+	configs[Redis] = Config{dockerLibraryRegistry, "redis", "3.2.9-alpine"}
 	configs[ResourceConsumer] = Config{e2eRegistry, "resource-consumer", "1.5"}
 	configs[ResourceController] = Config{e2eRegistry, "resource-consumer-controller", "1.0"}
 	configs[SdDummyExporter] = Config{gcRegistry, "sd-dummy-exporter", "v0.2.0"}

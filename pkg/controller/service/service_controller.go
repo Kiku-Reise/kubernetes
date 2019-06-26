@@ -60,9 +60,6 @@ const (
 	minRetryDelay = 5 * time.Second
 	maxRetryDelay = 300 * time.Second
 
-	clientRetryCount    = 5
-	clientRetryInterval = 5 * time.Second
-
 	// LabelNodeRoleMaster specifies that a node is a master
 	// It's copied over to kubeadm until it's merged in core: https://github.com/kubernetes/kubernetes/pull/39112
 	LabelNodeRoleMaster = "node-role.kubernetes.io/master"
@@ -78,7 +75,7 @@ type cachedService struct {
 }
 
 type serviceCache struct {
-	mu         sync.Mutex // protects serviceMap
+	mu         sync.RWMutex // protects serviceMap
 	serviceMap map[string]*cachedService
 }
 
@@ -378,8 +375,8 @@ func (s *ServiceController) ensureLoadBalancer(service *v1.Service) (*v1.LoadBal
 // ListKeys implements the interface required by DeltaFIFO to list the keys we
 // already know about.
 func (s *serviceCache) ListKeys() []string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	keys := make([]string, 0, len(s.serviceMap))
 	for k := range s.serviceMap {
 		keys = append(keys, k)
@@ -389,8 +386,8 @@ func (s *serviceCache) ListKeys() []string {
 
 // GetByKey returns the value stored in the serviceMap under the given key
 func (s *serviceCache) GetByKey(key string) (interface{}, bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if v, ok := s.serviceMap[key]; ok {
 		return v, true, nil
 	}
@@ -400,8 +397,8 @@ func (s *serviceCache) GetByKey(key string) (interface{}, bool, error) {
 // ListKeys implements the interface required by DeltaFIFO to list the keys we
 // already know about.
 func (s *serviceCache) allServices() []*v1.Service {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	services := make([]*v1.Service, 0, len(s.serviceMap))
 	for _, v := range s.serviceMap {
 		services = append(services, v.state)
@@ -410,8 +407,8 @@ func (s *serviceCache) allServices() []*v1.Service {
 }
 
 func (s *serviceCache) get(serviceName string) (*cachedService, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	service, ok := s.serviceMap[serviceName]
 	return service, ok
 }
@@ -507,10 +504,6 @@ func (s *ServiceController) needsUpdate(oldService *v1.Service, newService *v1.S
 	return false
 }
 
-func (s *ServiceController) loadBalancerName(service *v1.Service) string {
-	return s.balancer.GetLoadBalancerName(context.TODO(), "", service)
-}
-
 func getPortsForLB(service *v1.Service) ([]*v1.ServicePort, error) {
 	var protocol v1.Protocol
 
@@ -572,8 +565,9 @@ func portEqualForLB(x, y *v1.ServicePort) bool {
 		return false
 	}
 
-	// We don't check TargetPort; that is not relevant for load balancing
-	// TODO: Should we blank it out?  Or just check it anyway?
+	if x.TargetPort != y.TargetPort {
+		return false
+	}
 
 	return true
 }

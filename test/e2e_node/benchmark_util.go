@@ -32,8 +32,6 @@ import (
 	e2elog "k8s.io/kubernetes/test/e2e/framework/log"
 	"k8s.io/kubernetes/test/e2e/perftype"
 	nodeperftype "k8s.io/kubernetes/test/e2e_node/perftype"
-
-	. "github.com/onsi/gomega"
 )
 
 const (
@@ -156,26 +154,26 @@ func getThroughputPerfData(batchLag time.Duration, e2eLags []framework.PodLatenc
 func getTestNodeInfo(f *framework.Framework, testName, testDesc string) map[string]string {
 	nodeName := framework.TestContext.NodeName
 	node, err := f.ClientSet.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
-	Expect(err).NotTo(HaveOccurred())
+	framework.ExpectNoError(err)
 
 	cpu, ok := node.Status.Capacity[v1.ResourceCPU]
 	if !ok {
-		framework.Failf("Fail to fetch CPU capacity value of test node.")
+		e2elog.Failf("Fail to fetch CPU capacity value of test node.")
 	}
 
 	memory, ok := node.Status.Capacity[v1.ResourceMemory]
 	if !ok {
-		framework.Failf("Fail to fetch Memory capacity value of test node.")
+		e2elog.Failf("Fail to fetch Memory capacity value of test node.")
 	}
 
 	cpuValue, ok := cpu.AsInt64()
 	if !ok {
-		framework.Failf("Fail to fetch CPU capacity value as Int64.")
+		e2elog.Failf("Fail to fetch CPU capacity value as Int64.")
 	}
 
 	memoryValue, ok := memory.AsInt64()
 	if !ok {
-		framework.Failf("Fail to fetch Memory capacity value as Int64.")
+		e2elog.Failf("Fail to fetch Memory capacity value as Int64.")
 	}
 
 	image := node.Status.NodeInfo.OSImage

@@ -17,6 +17,7 @@ limitations under the License.
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -24,12 +25,13 @@ import (
 	"testing"
 	"time"
 
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
@@ -81,7 +83,6 @@ func newController() (*ServiceController, *fakecloud.Cloud, *fake.Clientset) {
 	controller.serviceListerSynced = alwaysReady
 	controller.eventRecorder = record.NewFakeRecorder(100)
 
-	controller.init()
 	cloud.Calls = nil     // ignore any cloud calls made in init()
 	client.ClearActions() // ignore any client calls made in init()
 
@@ -360,7 +361,7 @@ func TestSyncLoadBalancerIfNeeded(t *testing.T) {
 				}
 				if balancer == nil {
 					t.Errorf("Got no load balancer, expected one to be created")
-				} else if balancer.Name != controller.loadBalancerName(tc.service) ||
+				} else if balancer.Name != controller.balancer.GetLoadBalancerName(context.Background(), "", tc.service) ||
 					balancer.Region != region ||
 					balancer.Ports[0].Port != tc.service.Spec.Ports[0].Port {
 					t.Errorf("Created load balancer has incorrect parameters: %v", balancer)
@@ -982,6 +983,50 @@ func TestNeedsUpdate(t *testing.T) {
 				oldSvc = defaultExternalService()
 				newSvc = defaultExternalService()
 				newSvc.Spec.HealthCheckNodePort = 30123
+			},
+			expectedNeedsUpdate: true,
+		},
+		{
+			testName: "If TargetGroup is different 1",
+			updateFn: func() {
+				oldSvc = &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "tcp-service",
+						Namespace: "default",
+					},
+					Spec: v1.ServiceSpec{
+						Ports: []v1.ServicePort{{
+							Port:       80,
+							Protocol:   v1.ProtocolTCP,
+							TargetPort: intstr.Parse("20"),
+						}},
+						Type: v1.ServiceTypeLoadBalancer,
+					},
+				}
+				newSvc = oldSvc.DeepCopy()
+				newSvc.Spec.Ports[0].TargetPort = intstr.Parse("21")
+			},
+			expectedNeedsUpdate: true,
+		},
+		{
+			testName: "If TargetGroup is different 2",
+			updateFn: func() {
+				oldSvc = &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "tcp-service",
+						Namespace: "default",
+					},
+					Spec: v1.ServiceSpec{
+						Ports: []v1.ServicePort{{
+							Port:       80,
+							Protocol:   v1.ProtocolTCP,
+							TargetPort: intstr.Parse("22"),
+						}},
+						Type: v1.ServiceTypeLoadBalancer,
+					},
+				}
+				newSvc = oldSvc.DeepCopy()
+				newSvc.Spec.Ports[0].TargetPort = intstr.Parse("dns")
 			},
 			expectedNeedsUpdate: true,
 		},

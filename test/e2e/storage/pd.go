@@ -30,7 +30,7 @@ import (
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
-	policy "k8s.io/api/policy/v1beta1"
+	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -366,7 +366,7 @@ var _ = utils.SIGDescribe("Pod Disks", func() {
 						// if this defer is reached due to an Expect then nested
 						// Expects are lost, so use Failf here
 						if numNodes != origNodeCnt {
-							framework.Failf("defer: Requires current node count (%d) to return to original node count (%d)", numNodes, origNodeCnt)
+							e2elog.Failf("defer: Requires current node count (%d) to return to original node count (%d)", numNodes, origNodeCnt)
 						}
 					}
 				}()
@@ -411,7 +411,7 @@ var _ = utils.SIGDescribe("Pod Disks", func() {
 					framework.ExpectNoError(podClient.Delete(host0Pod.Name, metav1.NewDeleteOptions(0)), "Unable to delete host0Pod")
 
 				} else if disruptOp == evictPod {
-					evictTarget := &policy.Eviction{
+					evictTarget := &policyv1beta1.Eviction{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      host0Pod.Name,
 							Namespace: ns,
@@ -520,7 +520,7 @@ func testPDPod(diskNames []string, targetNode types.NodeName, readOnly bool, num
 	// escape if not a supported provider
 	if !(framework.TestContext.Provider == "gce" || framework.TestContext.Provider == "gke" ||
 		framework.TestContext.Provider == "aws") {
-		framework.Failf(fmt.Sprintf("func `testPDPod` only supports gce, gke, and aws providers, not %v", framework.TestContext.Provider))
+		e2elog.Failf(fmt.Sprintf("func `testPDPod` only supports gce, gke, and aws providers, not %v", framework.TestContext.Provider))
 	}
 
 	containers := make([]v1.Container, numContainers)

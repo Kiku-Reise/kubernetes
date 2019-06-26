@@ -230,7 +230,7 @@ function check-curl-proxy-code()
 function kubectl-with-retry()
 {
   ERROR_FILE="${KUBE_TEMP}/kubectl-error"
-  preserve_err_file=${PRESERVE_ERR_FILE-false}
+  preserve_err_file=${PRESERVE_ERR_FILE:-false}
   for count in {0..3}; do
     kubectl "$@" 2> ${ERROR_FILE} || true
     if grep -q "the object has been modified" "${ERROR_FILE}"; then
@@ -365,7 +365,6 @@ runTests() {
   pdb_min_available=".spec.minAvailable"
   pdb_max_unavailable=".spec.maxUnavailable"
   generation_field=".metadata.generation"
-  template_generation_field=".spec.templateGeneration"
   container_len="(len .spec.template.spec.containers)"
   image_field0="(index .spec.template.spec.containers 0).image"
   image_field1="(index .spec.template.spec.containers 1).image"

@@ -31,7 +31,6 @@ import (
 	"k8s.io/kubernetes/test/e2e_node/services"
 
 	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 )
 
 var _ = framework.KubeDescribe("Container Runtime Conformance Test", func() {
@@ -84,7 +83,7 @@ var _ = framework.KubeDescribe("Container Runtime Conformance Test", func() {
 
 					configFile := filepath.Join(services.KubeletRootDirectory, "config.json")
 					err := ioutil.WriteFile(configFile, []byte(auth), 0644)
-					Expect(err).NotTo(HaveOccurred())
+					framework.ExpectNoError(err)
 					defer os.Remove(configFile)
 
 					// checkContainerStatus checks whether the container status matches expectation.
@@ -145,7 +144,7 @@ var _ = framework.KubeDescribe("Container Runtime Conformance Test", func() {
 						if i < flakeRetry {
 							e2elog.Logf("No.%d attempt failed: %v, retrying...", i, err)
 						} else {
-							framework.Failf("All %d attempts failed: %v", flakeRetry, err)
+							e2elog.Failf("All %d attempts failed: %v", flakeRetry, err)
 						}
 					}
 				})
