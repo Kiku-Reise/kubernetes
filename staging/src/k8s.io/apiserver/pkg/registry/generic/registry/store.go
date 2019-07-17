@@ -44,7 +44,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/apiserver/pkg/storage"
 	storeerr "k8s.io/apiserver/pkg/storage/errors"
-	"k8s.io/apiserver/pkg/storage/etcd/metrics"
+	"k8s.io/apiserver/pkg/storage/etcd3/metrics"
 	"k8s.io/apiserver/pkg/util/dryrun"
 
 	"k8s.io/klog"
@@ -1310,7 +1310,8 @@ func (e *Store) CompleteWithOptions(options *generic.StoreOptions) error {
 
 	if e.Storage.Storage == nil {
 		e.Storage.Codec = opts.StorageConfig.Codec
-		e.Storage.Storage, e.DestroyFunc = opts.Decorator(
+		var err error
+		e.Storage.Storage, e.DestroyFunc, err = opts.Decorator(
 			opts.StorageConfig,
 			prefix,
 			keyFunc,
@@ -1319,6 +1320,9 @@ func (e *Store) CompleteWithOptions(options *generic.StoreOptions) error {
 			attrFunc,
 			triggerFunc,
 		)
+		if err != nil {
+			return err
+		}
 		e.StorageVersioner = opts.StorageConfig.EncodeVersioner
 
 		if opts.CountMetricPollPeriod > 0 {

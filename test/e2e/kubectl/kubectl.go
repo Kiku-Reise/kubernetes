@@ -388,7 +388,7 @@ var _ = SIGDescribe("Kubectl client", func() {
 				veryLongData[i] = 'a'
 			}
 			execOutput = framework.RunKubectlOrDie("exec", fmt.Sprintf("--namespace=%v", ns), simplePodName, "echo", string(veryLongData))
-			gomega.Expect(string(veryLongData)).To(gomega.Equal(strings.TrimSpace(execOutput)), "Unexpected kubectl exec output")
+			framework.ExpectEqual(string(veryLongData), strings.TrimSpace(execOutput), "Unexpected kubectl exec output")
 
 			ginkgo.By("executing a command in the container with noninteractive stdin")
 			execOutput = framework.NewKubectlCommand("exec", fmt.Sprintf("--namespace=%v", ns), "-i", simplePodName, "cat").
@@ -493,8 +493,8 @@ var _ = SIGDescribe("Kubectl client", func() {
 			ginkgo.By("execing into a container with a failing command")
 			_, err = framework.NewKubectlCommand(nsFlag, "exec", "nginx", "--", "/bin/sh", "-c", "exit 42").Exec()
 			ee, ok := err.(uexec.ExitError)
-			gomega.Expect(ok).To(gomega.Equal(true))
-			gomega.Expect(ee.ExitStatus()).To(gomega.Equal(42))
+			framework.ExpectEqual(ok, true)
+			framework.ExpectEqual(ee.ExitStatus(), 42)
 
 			ginkgo.By("running a successful command")
 			_, err = framework.NewKubectlCommand(nsFlag, "run", "-i", "--image="+busyboxImage, "--restart=Never", "success", "--", "/bin/sh", "-c", "exit 0").Exec()
@@ -503,8 +503,8 @@ var _ = SIGDescribe("Kubectl client", func() {
 			ginkgo.By("running a failing command")
 			_, err = framework.NewKubectlCommand(nsFlag, "run", "-i", "--image="+busyboxImage, "--restart=Never", "failure-1", "--", "/bin/sh", "-c", "exit 42").Exec()
 			ee, ok = err.(uexec.ExitError)
-			gomega.Expect(ok).To(gomega.Equal(true))
-			gomega.Expect(ee.ExitStatus()).To(gomega.Equal(42))
+			framework.ExpectEqual(ok, true)
+			framework.ExpectEqual(ee.ExitStatus(), 42)
 
 			ginkgo.By("running a failing command without --restart=Never")
 			_, err = framework.NewKubectlCommand(nsFlag, "run", "-i", "--image="+busyboxImage, "--restart=OnFailure", "failure-2", "--", "/bin/sh", "-c", "cat && exit 42").
@@ -1144,7 +1144,7 @@ metadata:
 			waitForOrFailWithDebug(1)
 			forEachPod(func(pod v1.Pod) {
 				e2elog.Logf("wait on redis-master startup in %v ", ns)
-				framework.LookForStringInLog(ns, pod.Name, "redis-master", "The server is now ready to accept connections", framework.PodStartTimeout)
+				framework.LookForStringInLog(ns, pod.Name, "redis-master", "Ready to accept connections", framework.PodStartTimeout)
 			})
 			validateService := func(name string, servicePort int, timeout time.Duration) {
 				err := wait.Poll(framework.Poll, timeout, func() (bool, error) {
@@ -1323,23 +1323,23 @@ metadata:
 			waitForOrFailWithDebug(1)
 			forEachPod(func(pod v1.Pod) {
 				ginkgo.By("checking for a matching strings")
-				_, err := framework.LookForStringInLog(ns, pod.Name, containerName, "The server is now ready to accept connections", framework.PodStartTimeout)
+				_, err := framework.LookForStringInLog(ns, pod.Name, containerName, "Ready to accept connections", framework.PodStartTimeout)
 				framework.ExpectNoError(err)
 
 				ginkgo.By("limiting log lines")
 				out := framework.RunKubectlOrDie("log", pod.Name, containerName, nsFlag, "--tail=1")
 				gomega.Expect(len(out)).NotTo(gomega.BeZero())
-				gomega.Expect(len(lines(out))).To(gomega.Equal(1))
+				framework.ExpectEqual(len(lines(out)), 1)
 
 				ginkgo.By("limiting log bytes")
 				out = framework.RunKubectlOrDie("log", pod.Name, containerName, nsFlag, "--limit-bytes=1")
-				gomega.Expect(len(lines(out))).To(gomega.Equal(1))
-				gomega.Expect(len(out)).To(gomega.Equal(1))
+				framework.ExpectEqual(len(lines(out)), 1)
+				framework.ExpectEqual(len(out), 1)
 
 				ginkgo.By("exposing timestamps")
 				out = framework.RunKubectlOrDie("log", pod.Name, containerName, nsFlag, "--tail=1", "--timestamps")
 				l := lines(out)
-				gomega.Expect(len(l)).To(gomega.Equal(1))
+				framework.ExpectEqual(len(l), 1)
 				words := strings.Split(l[0], " ")
 				gomega.Expect(len(words)).To(gomega.BeNumerically(">", 1))
 				if _, err := time.Parse(time.RFC3339Nano, words[0]); err != nil {

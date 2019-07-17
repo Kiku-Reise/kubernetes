@@ -41,11 +41,11 @@ import (
 	"k8s.io/kubernetes/cmd/kubeadm/app/util/system"
 	commontest "k8s.io/kubernetes/test/e2e/common"
 	"k8s.io/kubernetes/test/e2e/framework"
+	e2econfig "k8s.io/kubernetes/test/e2e/framework/config"
 	"k8s.io/kubernetes/test/e2e/framework/testfiles"
 	"k8s.io/kubernetes/test/e2e/generated"
 	"k8s.io/kubernetes/test/e2e_node/services"
 
-	"github.com/kardianos/osext"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
 	morereporters "github.com/onsi/ginkgo/reporters"
@@ -63,8 +63,9 @@ var systemValidateMode = flag.Bool("system-validate-mode", false, "If true, only
 var systemSpecFile = flag.String("system-spec-file", "", "The name of the system spec file that will be used for node conformance test. If it's unspecified or empty, the default system spec (system.DefaultSysSpec) will be used.")
 
 func init() {
-	framework.RegisterCommonFlags()
-	framework.RegisterNodeFlags()
+	e2econfig.CopyFlags(e2econfig.Flags, flag.CommandLine)
+	framework.RegisterCommonFlags(flag.CommandLine)
+	framework.RegisterNodeFlags(flag.CommandLine)
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 	// Mark the run-services-mode flag as hidden to prevent user from using it.
 	pflag.CommandLine.MarkHidden("run-services-mode")
@@ -202,7 +203,7 @@ var _ = SynchronizedAfterSuite(func() {}, func() {
 
 // validateSystem runs system validation in a separate process and returns error if validation fails.
 func validateSystem() error {
-	testBin, err := osext.Executable()
+	testBin, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("can't get current binary: %v", err)
 	}

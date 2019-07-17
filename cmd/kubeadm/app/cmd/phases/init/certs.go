@@ -136,10 +136,12 @@ func getCertPhaseFlags(name string) []string {
 		options.CfgPath,
 		options.CSROnly,
 		options.CSRDir,
+		options.KubernetesVersion,
 	}
 	if name == "all" || name == "apiserver" {
 		flags = append(flags,
 			options.APIServerAdvertiseAddress,
+			options.ControlPlaneEndpoint,
 			options.APIServerCertSANs,
 			options.NetworkingDNSDomain,
 			options.NetworkingServiceSubnet,

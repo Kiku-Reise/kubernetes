@@ -647,8 +647,9 @@ func MakePersistentVolumeClaim(cfg PersistentVolumeClaimConfig, ns string) *v1.P
 
 func createPDWithRetry(zone string) (string, error) {
 	var err error
+	var newDiskName string
 	for start := time.Now(); time.Since(start) < pdRetryTimeout; time.Sleep(pdRetryPollTime) {
-		newDiskName, err := createPD(zone)
+		newDiskName, err = createPD(zone)
 		if err != nil {
 			e2elog.Logf("Couldn't create a new PD, sleeping 5 seconds: %v", err)
 			continue
@@ -948,6 +949,36 @@ func SetAffinity(nodeSelection *NodeSelection, nodeName string) {
 // SetAntiAffinity sets anti-affinity to nodeName to nodeSelection
 func SetAntiAffinity(nodeSelection *NodeSelection, nodeName string) {
 	SetNodeAffinityRequirement(nodeSelection, v1.NodeSelectorOpNotIn, nodeName)
+}
+
+// SetNodeAffinityPreference sets affinity preference with specified operator to nodeName to nodeSelection
+func SetNodeAffinityPreference(nodeSelection *NodeSelection, operator v1.NodeSelectorOperator, nodeName string) {
+	// Add node-anti-affinity.
+	if nodeSelection.Affinity == nil {
+		nodeSelection.Affinity = &v1.Affinity{}
+	}
+	if nodeSelection.Affinity.NodeAffinity == nil {
+		nodeSelection.Affinity.NodeAffinity = &v1.NodeAffinity{}
+	}
+	nodeSelection.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution = append(nodeSelection.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution,
+		v1.PreferredSchedulingTerm{
+			Weight: int32(100),
+			Preference: v1.NodeSelectorTerm{
+				MatchFields: []v1.NodeSelectorRequirement{
+					{Key: "metadata.name", Operator: operator, Values: []string{nodeName}},
+				},
+			},
+		})
+}
+
+// SetAffinityPreference sets affinity preference to nodeName to nodeSelection
+func SetAffinityPreference(nodeSelection *NodeSelection, nodeName string) {
+	SetNodeAffinityPreference(nodeSelection, v1.NodeSelectorOpIn, nodeName)
+}
+
+// SetAntiAffinityPreference sets anti-affinity preference to nodeName to nodeSelection
+func SetAntiAffinityPreference(nodeSelection *NodeSelection, nodeName string) {
+	SetNodeAffinityPreference(nodeSelection, v1.NodeSelectorOpNotIn, nodeName)
 }
 
 // CreateClientPod defines and creates a pod with a mounted PV.  Pod runs infinite loop until killed.

@@ -54,31 +54,27 @@ var CurrentSuite Suite
 // TODO(random-liu): Change the image puller pod to use similar mechanism.
 var CommonImageWhiteList = sets.NewString(
 	imageutils.GetE2EImage(imageutils.Agnhost),
-	imageutils.GetE2EImage(imageutils.AuditProxy),
 	imageutils.GetE2EImage(imageutils.BusyBox),
-	imageutils.GetE2EImage(imageutils.EntrypointTester),
 	imageutils.GetE2EImage(imageutils.IpcUtils),
 	imageutils.GetE2EImage(imageutils.Mounttest),
 	imageutils.GetE2EImage(imageutils.MounttestUser),
 	imageutils.GetE2EImage(imageutils.Nginx),
-	imageutils.GetE2EImage(imageutils.ServeHostname),
 	imageutils.GetE2EImage(imageutils.TestWebserver),
 	imageutils.GetE2EImage(imageutils.VolumeNFSServer),
 	imageutils.GetE2EImage(imageutils.VolumeGlusterServer),
 )
 
 type testImagesStruct struct {
-	AgnhostImage      string
-	BusyBoxImage      string
-	GBFrontendImage   string
-	GBRedisSlaveImage string
-	KittenImage       string
-	MounttestImage    string
-	NautilusImage     string
-	NginxImage        string
-	NginxNewImage     string
-	PauseImage        string
-	RedisImage        string
+	AgnhostImage    string
+	BusyBoxImage    string
+	GBFrontendImage string
+	KittenImage     string
+	MounttestImage  string
+	NautilusImage   string
+	NginxImage      string
+	NginxNewImage   string
+	PauseImage      string
+	RedisImage      string
 }
 
 var testImages testImagesStruct
@@ -88,7 +84,6 @@ func init() {
 		imageutils.GetE2EImage(imageutils.Agnhost),
 		imageutils.GetE2EImage(imageutils.BusyBox),
 		imageutils.GetE2EImage(imageutils.GBFrontend),
-		imageutils.GetE2EImage(imageutils.GBRedisSlave),
 		imageutils.GetE2EImage(imageutils.Kitten),
 		imageutils.GetE2EImage(imageutils.Mounttest),
 		imageutils.GetE2EImage(imageutils.Nautilus),

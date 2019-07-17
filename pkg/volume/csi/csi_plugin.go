@@ -54,13 +54,14 @@ const (
 	// TODO (vladimirvivien) would be nice to name socket with a .sock extension
 	// for consistency.
 	csiAddrTemplate = "/var/lib/kubelet/plugins/%v/csi.sock"
-	csiTimeout      = 15 * time.Second
+	csiTimeout      = 2 * time.Minute
 	volNameSep      = "^"
 	volDataFileName = "vol_data.json"
 	fsTypeBlockName = "block"
 
+	// CsiResyncPeriod is default resync period duration
 	// TODO: increase to something useful
-	csiResyncPeriod = time.Minute
+	CsiResyncPeriod = time.Minute
 )
 
 var deprecatedSocketDirVersions = []string{"0.1.0", "0.2.0", "0.3.0", "0.4.0"}
@@ -391,6 +392,12 @@ func (p *csiPlugin) NewMounter(
 		return nil, errors.New("failed to get a Kubernetes client")
 	}
 
+	kvh, ok := p.host.(volume.KubeletVolumeHost)
+	if !ok {
+		klog.Error(log("cast from VolumeHost to KubeletVolumeHost failed"))
+		return nil, errors.New("cast from VolumeHost to KubeletVolumeHost failed")
+	}
+
 	mounter := &csiMountMgr{
 		plugin:       p,
 		k8s:          k8s,
@@ -402,6 +409,7 @@ func (p *csiPlugin) NewMounter(
 		volumeID:     volumeHandle,
 		specVolumeID: spec.Name(),
 		readOnly:     readOnly,
+		kubeVolHost:  kvh,
 	}
 	mounter.csiClientGetter.driverName = csiDriverName(driverName)
 
@@ -447,10 +455,17 @@ func (p *csiPlugin) NewMounter(
 func (p *csiPlugin) NewUnmounter(specName string, podUID types.UID) (volume.Unmounter, error) {
 	klog.V(4).Infof(log("setting up unmounter for [name=%v, podUID=%v]", specName, podUID))
 
+	kvh, ok := p.host.(volume.KubeletVolumeHost)
+	if !ok {
+		klog.Error(log("cast from VolumeHost to KubeletVolumeHost failed"))
+		return nil, errors.New("cast from VolumeHost to KubeletVolumeHost failed")
+	}
+
 	unmounter := &csiMountMgr{
 		plugin:       p,
 		podUID:       podUID,
 		specVolumeID: specName,
+		kubeVolHost:  kvh,
 	}
 
 	// load volume info from file

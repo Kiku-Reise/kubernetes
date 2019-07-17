@@ -80,6 +80,7 @@ go_library(
             "//pkg/util/procfs:go_default_library",
             "//pkg/util/sysctl:go_default_library",
             "//staging/src/k8s.io/apimachinery/pkg/util/errors:go_default_library",
+            "//staging/src/k8s.io/apimachinery/pkg/util/runtime:go_default_library",
             "//staging/src/k8s.io/apimachinery/pkg/util/version:go_default_library",
             "//staging/src/k8s.io/apimachinery/pkg/util/wait:go_default_library",
             "//staging/src/k8s.io/client-go/tools/record:go_default_library",
@@ -88,6 +89,7 @@ go_library(
             "//vendor/github.com/opencontainers/runc/libcontainer/cgroups/fs:go_default_library",
             "//vendor/github.com/opencontainers/runc/libcontainer/cgroups/systemd:go_default_library",
             "//vendor/github.com/opencontainers/runc/libcontainer/configs:go_default_library",
+            "//vendor/k8s.io/utils/io:go_default_library",
             "//vendor/k8s.io/utils/path:go_default_library",
         ],
         "@io_bazel_rules_go//go/platform:nacl": [

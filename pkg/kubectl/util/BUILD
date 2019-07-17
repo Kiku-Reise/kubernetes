@@ -66,13 +66,7 @@ filegroup(
     name = "all-srcs",
     srcs = [
         ":package-srcs",
-        "//pkg/kubectl/util/certificate:all-srcs",
-        "//pkg/kubectl/util/fieldpath:all-srcs",
         "//pkg/kubectl/util/i18n:all-srcs",
-        "//pkg/kubectl/util/logs:all-srcs",
-        "//pkg/kubectl/util/qos:all-srcs",
-        "//pkg/kubectl/util/resource:all-srcs",
-        "//pkg/kubectl/util/slice:all-srcs",
     ],
     tags = ["automanaged"],
     visibility = ["//build/visible_to:pkg_kubectl_util_CONSUMERS"],
