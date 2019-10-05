@@ -26,9 +26,10 @@ import (
 
 	"github.com/onsi/ginkgo"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
+	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 	"k8s.io/kubernetes/test/e2e/framework/volume"
 	"k8s.io/kubernetes/test/e2e/storage/testpatterns"
 	imageutils "k8s.io/kubernetes/test/utils/image"
@@ -78,7 +79,7 @@ func (t *volumesTestSuite) getTestSuiteInfo() TestSuiteInfo {
 	return t.tsInfo
 }
 
-func (t *volumesTestSuite) skipUnsupportedTest(pattern testpatterns.TestPattern, driver TestDriver) {
+func (t *volumesTestSuite) skipRedundantSuite(driver TestDriver, pattern testpatterns.TestPattern) {
 }
 
 func skipExecTest(driver TestDriver) {
@@ -88,7 +89,7 @@ func skipExecTest(driver TestDriver) {
 	}
 }
 
-func skipBlockTest(driver TestDriver) {
+func skipTestIfBlockNotSupported(driver TestDriver) {
 	dInfo := driver.GetDriverInfo()
 	if !dInfo.Capabilities[CapBlock] {
 		framework.Skipf("Driver %q does not provide raw block - skipping", dInfo.Name)
@@ -97,8 +98,8 @@ func skipBlockTest(driver TestDriver) {
 
 func (t *volumesTestSuite) defineTests(driver TestDriver, pattern testpatterns.TestPattern) {
 	type local struct {
-		config      *PerTestConfig
-		testCleanup func()
+		config        *PerTestConfig
+		driverCleanup func()
 
 		resource *genericVolumeTestResource
 
@@ -120,7 +121,7 @@ func (t *volumesTestSuite) defineTests(driver TestDriver, pattern testpatterns.T
 		l = local{}
 
 		// Now do the more expensive test initialization.
-		l.config, l.testCleanup = driver.PrepareTest(f)
+		l.config, l.driverCleanup = driver.PrepareTest(f)
 		l.intreeOps, l.migratedOps = getMigrationVolumeOpCounts(f.ClientSet, dInfo.InTreePluginName)
 		l.resource = createGenericVolumeTestResource(driver, l.config, pattern)
 		if l.resource.volSource == nil {
@@ -134,9 +135,9 @@ func (t *volumesTestSuite) defineTests(driver TestDriver, pattern testpatterns.T
 			l.resource = nil
 		}
 
-		if l.testCleanup != nil {
-			l.testCleanup()
-			l.testCleanup = nil
+		if l.driverCleanup != nil {
+			l.driverCleanup()
+			l.driverCleanup = nil
 		}
 
 		validateMigrationVolumeOpCounts(f.ClientSet, dInfo.InTreePluginName, l.intreeOps, l.migratedOps)
@@ -144,7 +145,7 @@ func (t *volumesTestSuite) defineTests(driver TestDriver, pattern testpatterns.T
 
 	ginkgo.It("should store data", func() {
 		if pattern.VolMode == v1.PersistentVolumeBlock {
-			skipBlockTest(driver)
+			skipTestIfBlockNotSupported(driver)
 		}
 
 		init()
@@ -246,6 +247,6 @@ func testScriptInPod(
 	f.TestContainerOutput("exec-volume-test", pod, 0, []string{fileName})
 
 	ginkgo.By(fmt.Sprintf("Deleting pod %s", pod.Name))
-	err := framework.DeletePodWithWait(f, f.ClientSet, pod)
+	err := e2epod.DeletePodWithWait(f.ClientSet, pod)
 	framework.ExpectNoError(err, "while deleting pod")
 }

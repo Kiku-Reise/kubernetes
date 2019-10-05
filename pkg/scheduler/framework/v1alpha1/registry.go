@@ -20,10 +20,29 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/json"
+	"sigs.k8s.io/yaml"
 )
 
 // PluginFactory is a function that builds a plugin.
 type PluginFactory = func(configuration *runtime.Unknown, f FrameworkHandle) (Plugin, error)
+
+// DecodeInto decodes configuration whose type is *runtime.Unknown to the interface into.
+func DecodeInto(configuration *runtime.Unknown, into interface{}) error {
+	if configuration == nil {
+		return nil
+	}
+
+	switch configuration.ContentType {
+	// If ContentType is empty, it means ContentTypeJSON by default.
+	case runtime.ContentTypeJSON, "":
+		return json.Unmarshal(configuration.Raw, into)
+	case runtime.ContentTypeYAML:
+		return yaml.Unmarshal(configuration.Raw, into)
+	default:
+		return fmt.Errorf("not supported content type %s", configuration.ContentType)
+	}
+}
 
 // Registry is a collection of all available plugins. The framework uses a
 // registry to enable and initialize configured plugins.
@@ -48,20 +67,4 @@ func (r Registry) Unregister(name string) error {
 	}
 	delete(r, name)
 	return nil
-}
-
-// NewRegistry builds a default registry with all the default plugins.
-// This is the registry that Kubernetes default scheduler uses. A scheduler that
-// runs custom plugins, can pass a different Registry and when initializing the
-// scheduler.
-func NewRegistry() Registry {
-	return Registry{
-		// FactoryMap:
-		// New plugins are registered here.
-		// example:
-		// {
-		//  stateful_plugin.Name: stateful.NewStatefulMultipointExample,
-		//  fooplugin.Name: fooplugin.New,
-		// }
-	}
 }

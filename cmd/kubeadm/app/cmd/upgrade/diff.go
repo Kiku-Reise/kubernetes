@@ -25,6 +25,7 @@ import (
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/version"
+	client "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 	kubeadmapi "k8s.io/kubernetes/cmd/kubeadm/app/apis/kubeadm"
 	"k8s.io/kubernetes/cmd/kubeadm/app/cmd/options"
@@ -64,9 +65,9 @@ func NewCmdDiff(out io.Writer) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "diff [version]",
 		Short: "Show what differences would be applied to existing static pod manifests. See also: kubeadm upgrade apply --dry-run",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			// TODO: Run preflight checks for diff to check that the manifests already exist.
-			kubeadmutil.CheckErr(runDiff(flags, args))
+			return runDiff(flags, args)
 		},
 	}
 
@@ -86,7 +87,8 @@ func runDiff(flags *diffFlags, args []string) error {
 	if flags.cfgPath != "" {
 		cfg, err = configutil.LoadInitConfigurationFromFile(flags.cfgPath)
 	} else {
-		client, err := kubeconfigutil.ClientSetFromFile(flags.kubeConfigPath)
+		var client *client.Clientset
+		client, err = kubeconfigutil.ClientSetFromFile(flags.kubeConfigPath)
 		if err != nil {
 			return errors.Wrapf(err, "couldn't create a Kubernetes client from file %q", flags.kubeConfigPath)
 		}

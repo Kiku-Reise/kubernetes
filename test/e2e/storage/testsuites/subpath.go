@@ -27,7 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/kubernetes/test/e2e/framework"
-	e2elog "k8s.io/kubernetes/test/e2e/framework/log"
 	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 	"k8s.io/kubernetes/test/e2e/framework/volume"
 	"k8s.io/kubernetes/test/e2e/storage/testpatterns"
@@ -74,10 +73,16 @@ func (s *subPathTestSuite) getTestSuiteInfo() TestSuiteInfo {
 	return s.tsInfo
 }
 
+func (s *subPathTestSuite) skipRedundantSuite(driver TestDriver, pattern testpatterns.TestPattern) {
+	skipVolTypePatterns(pattern, driver, testpatterns.NewVolTypeMap(
+		testpatterns.PreprovisionedPV,
+		testpatterns.InlineVolume))
+}
+
 func (s *subPathTestSuite) defineTests(driver TestDriver, pattern testpatterns.TestPattern) {
 	type local struct {
-		config      *PerTestConfig
-		testCleanup func()
+		config        *PerTestConfig
+		driverCleanup func()
 
 		resource          *genericVolumeTestResource
 		roVolSource       *v1.VolumeSource
@@ -104,7 +109,7 @@ func (s *subPathTestSuite) defineTests(driver TestDriver, pattern testpatterns.T
 		l = local{}
 
 		// Now do the more expensive test initialization.
-		l.config, l.testCleanup = driver.PrepareTest(f)
+		l.config, l.driverCleanup = driver.PrepareTest(f)
 		l.intreeOps, l.migratedOps = getMigrationVolumeOpCounts(f.ClientSet, driver.GetDriverInfo().InTreePluginName)
 		l.resource = createGenericVolumeTestResource(driver, l.config, pattern)
 
@@ -130,7 +135,7 @@ func (s *subPathTestSuite) defineTests(driver TestDriver, pattern testpatterns.T
 				},
 			}
 		default:
-			e2elog.Failf("SubPath test doesn't support: %s", volType)
+			framework.Failf("SubPath test doesn't support: %s", volType)
 		}
 
 		subPath := f.Namespace.Name
@@ -150,7 +155,7 @@ func (s *subPathTestSuite) defineTests(driver TestDriver, pattern testpatterns.T
 	cleanup := func() {
 		if l.pod != nil {
 			ginkgo.By("Deleting pod")
-			err := framework.DeletePodWithWait(f, f.ClientSet, l.pod)
+			err := e2epod.DeletePodWithWait(f.ClientSet, l.pod)
 			framework.ExpectNoError(err, "while deleting pod")
 			l.pod = nil
 		}
@@ -160,9 +165,9 @@ func (s *subPathTestSuite) defineTests(driver TestDriver, pattern testpatterns.T
 			l.resource = nil
 		}
 
-		if l.testCleanup != nil {
-			l.testCleanup()
-			l.testCleanup = nil
+		if l.driverCleanup != nil {
+			l.driverCleanup()
+			l.driverCleanup = nil
 		}
 
 		validateMigrationVolumeOpCounts(f.ClientSet, driver.GetDriverInfo().InTreePluginName, l.intreeOps, l.migratedOps)
@@ -430,7 +435,7 @@ func (s *subPathTestSuite) defineTests(driver TestDriver, pattern testpatterns.T
 		framework.ExpectNoError(err, "while creating pod")
 		defer func() {
 			ginkgo.By(fmt.Sprintf("Deleting pod %s", pod.Name))
-			framework.DeletePodWithWait(f, f.ClientSet, pod)
+			e2epod.DeletePodWithWait(f.ClientSet, pod)
 		}()
 
 		// Wait for pod to be running
@@ -462,7 +467,7 @@ func TestBasicSubpathFile(f *framework.Framework, contents string, pod *v1.Pod, 
 	f.TestContainerOutput("atomic-volume-subpath", pod, 0, []string{contents})
 
 	ginkgo.By(fmt.Sprintf("Deleting pod %s", pod.Name))
-	err := framework.DeletePodWithWait(f, f.ClientSet, pod)
+	err := e2epod.DeletePodWithWait(f.ClientSet, pod)
 	framework.ExpectNoError(err, "while deleting pod")
 }
 
@@ -701,7 +706,7 @@ func testReadFile(f *framework.Framework, file string, pod *v1.Pod, containerInd
 	})
 
 	ginkgo.By(fmt.Sprintf("Deleting pod %s", pod.Name))
-	err := framework.DeletePodWithWait(f, f.ClientSet, pod)
+	err := e2epod.DeletePodWithWait(f.ClientSet, pod)
 	framework.ExpectNoError(err, "while deleting pod")
 }
 
@@ -715,7 +720,7 @@ func testPodFailSubpathError(f *framework.Framework, pod *v1.Pod, errorMsg strin
 	pod, err := f.ClientSet.CoreV1().Pods(f.Namespace.Name).Create(pod)
 	framework.ExpectNoError(err, "while creating pod")
 	defer func() {
-		framework.DeletePodWithWait(f, f.ClientSet, pod)
+		e2epod.DeletePodWithWait(f.ClientSet, pod)
 	}()
 	ginkgo.By("Checking for subpath error in container status")
 	err = waitForPodSubpathError(f, pod, allowContainerTerminationError)
@@ -794,14 +799,14 @@ func testPodContainerRestart(f *framework.Framework, pod *v1.Pod) {
 	pod, err := f.ClientSet.CoreV1().Pods(f.Namespace.Name).Create(pod)
 	framework.ExpectNoError(err, "while creating pod")
 	defer func() {
-		framework.DeletePodWithWait(f, f.ClientSet, pod)
+		e2epod.DeletePodWithWait(f.ClientSet, pod)
 	}()
 	err = e2epod.WaitForPodRunningInNamespace(f.ClientSet, pod)
 	framework.ExpectNoError(err, "while waiting for pod to be running")
 
 	ginkgo.By("Failing liveness probe")
 	out, err := podContainerExec(pod, 1, fmt.Sprintf("rm %v", probeFilePath))
-	e2elog.Logf("Pod exec output: %v", out)
+	framework.Logf("Pod exec output: %v", out)
 	framework.ExpectNoError(err, "while failing liveness probe")
 
 	// Check that container has restarted
@@ -814,10 +819,10 @@ func testPodContainerRestart(f *framework.Framework, pod *v1.Pod) {
 		}
 		for _, status := range pod.Status.ContainerStatuses {
 			if status.Name == pod.Spec.Containers[0].Name {
-				e2elog.Logf("Container %v, restarts: %v", status.Name, status.RestartCount)
+				framework.Logf("Container %v, restarts: %v", status.Name, status.RestartCount)
 				restarts = status.RestartCount
 				if restarts > 0 {
-					e2elog.Logf("Container has restart count: %v", restarts)
+					framework.Logf("Container has restart count: %v", restarts)
 					return true, nil
 				}
 			}
@@ -835,7 +840,7 @@ func testPodContainerRestart(f *framework.Framework, pod *v1.Pod) {
 		writeCmd = fmt.Sprintf("echo test-after > %v", probeFilePath)
 	}
 	out, err = podContainerExec(pod, 1, writeCmd)
-	e2elog.Logf("Pod exec output: %v", out)
+	framework.Logf("Pod exec output: %v", out)
 	framework.ExpectNoError(err, "while rewriting the probe file")
 
 	// Wait for container restarts to stabilize
@@ -852,13 +857,13 @@ func testPodContainerRestart(f *framework.Framework, pod *v1.Pod) {
 				if status.RestartCount == restarts {
 					stableCount++
 					if stableCount > stableThreshold {
-						e2elog.Logf("Container restart has stabilized")
+						framework.Logf("Container restart has stabilized")
 						return true, nil
 					}
 				} else {
 					restarts = status.RestartCount
 					stableCount = 0
-					e2elog.Logf("Container has restart count: %v", restarts)
+					framework.Logf("Container has restart count: %v", restarts)
 				}
 				break
 			}
@@ -904,7 +909,7 @@ func formatVolume(f *framework.Framework, pod *v1.Pod) {
 	err = e2epod.WaitForPodSuccessInNamespace(f.ClientSet, pod.Name, pod.Namespace)
 	framework.ExpectNoError(err, "while waiting for volume init pod to succeed")
 
-	err = framework.DeletePodWithWait(f, f.ClientSet, pod)
+	err = e2epod.DeletePodWithWait(f.ClientSet, pod)
 	framework.ExpectNoError(err, "while deleting volume init pod")
 }
 

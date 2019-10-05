@@ -152,7 +152,7 @@ func (dc *DeploymentController) Run(workers int, stopCh <-chan struct{}) {
 	klog.Infof("Starting deployment controller")
 	defer klog.Infof("Shutting down deployment controller")
 
-	if !controller.WaitForCacheSync("deployment", stopCh, dc.dListerSynced, dc.rsListerSynced, dc.podListerSynced) {
+	if !cache.WaitForNamedCacheSync("deployment", stopCh, dc.dListerSynced, dc.rsListerSynced, dc.podListerSynced) {
 		return
 	}
 
@@ -525,7 +525,7 @@ func (dc *DeploymentController) getReplicaSetsForDeployment(d *apps.Deployment) 
 //
 // It returns a map from ReplicaSet UID to a list of Pods controlled by that RS,
 // according to the Pod's ControllerRef.
-// NOTE: The pod pointers returned by this method point the the pod objects in the cache and thus
+// NOTE: The pod pointers returned by this method point the pod objects in the cache and thus
 // shouldn't be modified in any way.
 func (dc *DeploymentController) getPodMapForDeployment(d *apps.Deployment, rsList []*apps.ReplicaSet) (map[types.UID][]*v1.Pod, error) {
 	// Get all Pods that potentially belong to this Deployment.

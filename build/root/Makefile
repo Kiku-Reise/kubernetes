@@ -238,6 +238,8 @@ define TEST_E2E_NODE_HELP_INFO
 #    run tests against.  Defaults to "".
 #  DELETE_INSTANCES: For REMOTE=true only.  Delete any instances created as
 #    part of this test run.  Defaults to false.
+#  PREEMPTIBLE_INSTANCES: For REMOTE=true only.  Mark created gce instances
+#    as preemptible.  Defaults to false.
 #  ARTIFACTS: For REMOTE=true only.  Local directory to scp test artifacts into
 #    from the remote hosts.  Defaults to "/tmp/_artifacts".
 #  REPORT: For REMOTE=false only.  Local directory to write juntil xml results
@@ -445,6 +447,8 @@ define RELEASE_SKIP_TESTS_HELP_INFO
 # Args:
 #   KUBE_RELEASE_RUN_TESTS: Whether to run tests. Set to 'y' to run tests anyways.
 #   KUBE_FASTBUILD: Whether to cross-compile for other architectures. Set to 'false' to do so.
+#   KUBE_DOCKER_REGISTRY: Registry of released images, default to k8s.gcr.io
+#   KUBE_BASE_IMAGE_REGISTRY: Registry of base images for controlplane binaries, default to k8s.gcr.io
 #
 # Example:
 #   make release-skip-tests
@@ -553,7 +557,7 @@ ifeq ($(PRINT_HELP),y)
 generated_files:
 	@echo "$$GENERATED_FILES_HELP_INFO"
 else
-generated_files:
+generated_files gen_openapi:
 	$(MAKE) -f Makefile.generated_files $@ CALLED_FROM_MAIN_MAKEFILE=1
 endif
 

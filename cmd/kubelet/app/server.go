@@ -60,6 +60,8 @@ import (
 	"k8s.io/client-go/util/keyutil"
 	cloudprovider "k8s.io/cloud-provider"
 	cliflag "k8s.io/component-base/cli/flag"
+	"k8s.io/component-base/version"
+	"k8s.io/component-base/version/verflag"
 	kubeletconfigv1beta1 "k8s.io/kubelet/config/v1beta1"
 	"k8s.io/kubernetes/cmd/kubelet/app/options"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
@@ -95,8 +97,7 @@ import (
 	nodeutil "k8s.io/kubernetes/pkg/util/node"
 	"k8s.io/kubernetes/pkg/util/oom"
 	"k8s.io/kubernetes/pkg/util/rlimit"
-	"k8s.io/kubernetes/pkg/version"
-	"k8s.io/kubernetes/pkg/version/verflag"
+	"k8s.io/kubernetes/pkg/volume/util/hostutil"
 	"k8s.io/kubernetes/pkg/volume/util/subpath"
 	"k8s.io/utils/exec"
 )
@@ -369,7 +370,7 @@ func UnsecuredDependencies(s *options.KubeletServer) (*kubelet.Dependencies, err
 
 	mounter := mount.New(s.ExperimentalMounterPath)
 	subpather := subpath.New(mounter)
-	hu := mount.NewHostUtil()
+	hu := hostutil.NewHostUtil()
 	var pluginRunner = exec.New()
 
 	var dockerClientConfig *dockershim.ClientConfig
@@ -418,7 +419,7 @@ func Run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, stopCh <-chan
 
 func checkPermissions() error {
 	if uid := os.Getuid(); uid != 0 {
-		return fmt.Errorf("Kubelet needs to run as uid `0`. It is being run as %d", uid)
+		return fmt.Errorf("kubelet needs to run as uid `0`. It is being run as %d", uid)
 	}
 	// TODO: Check if kubelet is running in the `initial` user namespace.
 	// http://man7.org/linux/man-pages/man7/user_namespaces.7.html
@@ -693,6 +694,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, stopCh <-chan
 				ExperimentalPodPidsLimit:              s.PodPidsLimit,
 				EnforceCPULimits:                      s.CPUCFSQuota,
 				CPUCFSQuotaPeriod:                     s.CPUCFSQuotaPeriod.Duration,
+				ExperimentalTopologyManagerPolicy:     s.TopologyManagerPolicy,
 			},
 			s.FailSwapOn,
 			devicePluginEnabled,

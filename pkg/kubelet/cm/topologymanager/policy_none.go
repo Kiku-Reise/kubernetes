@@ -33,10 +33,10 @@ func NewNonePolicy() Policy {
 }
 
 func (p *nonePolicy) Name() string {
-	return string(PolicyNone)
+	return PolicyNone
 }
 
-func (p *nonePolicy) CanAdmitPodResult(admit bool) lifecycle.PodAdmitResult {
+func (p *nonePolicy) CanAdmitPodResult(hint *TopologyHint) lifecycle.PodAdmitResult {
 	return lifecycle.PodAdmitResult{
 		Admit: true,
 	}

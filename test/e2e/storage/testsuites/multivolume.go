@@ -26,7 +26,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
-	e2elog "k8s.io/kubernetes/test/e2e/framework/log"
+	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
+	e2epv "k8s.io/kubernetes/test/e2e/framework/pv"
 	"k8s.io/kubernetes/test/e2e/storage/testpatterns"
 	"k8s.io/kubernetes/test/e2e/storage/utils"
 )
@@ -56,10 +57,14 @@ func (t *multiVolumeTestSuite) getTestSuiteInfo() TestSuiteInfo {
 	return t.tsInfo
 }
 
+func (t *multiVolumeTestSuite) skipRedundantSuite(driver TestDriver, pattern testpatterns.TestPattern) {
+	skipVolTypePatterns(pattern, driver, testpatterns.NewVolTypeMap(testpatterns.PreprovisionedPV))
+}
+
 func (t *multiVolumeTestSuite) defineTests(driver TestDriver, pattern testpatterns.TestPattern) {
 	type local struct {
-		config      *PerTestConfig
-		testCleanup func()
+		config        *PerTestConfig
+		driverCleanup func()
 
 		cs        clientset.Interface
 		ns        *v1.Namespace
@@ -94,7 +99,7 @@ func (t *multiVolumeTestSuite) defineTests(driver TestDriver, pattern testpatter
 		l.driver = driver
 
 		// Now do the more expensive test initialization.
-		l.config, l.testCleanup = driver.PrepareTest(f)
+		l.config, l.driverCleanup = driver.PrepareTest(f)
 		l.intreeOps, l.migratedOps = getMigrationVolumeOpCounts(f.ClientSet, dInfo.InTreePluginName)
 	}
 
@@ -103,9 +108,9 @@ func (t *multiVolumeTestSuite) defineTests(driver TestDriver, pattern testpatter
 			resource.cleanupResource()
 		}
 
-		if l.testCleanup != nil {
-			l.testCleanup()
-			l.testCleanup = nil
+		if l.driverCleanup != nil {
+			l.driverCleanup()
+			l.driverCleanup = nil
 		}
 
 		validateMigrationVolumeOpCounts(f.ClientSet, dInfo.InTreePluginName, l.intreeOps, l.migratedOps)
@@ -137,7 +142,7 @@ func (t *multiVolumeTestSuite) defineTests(driver TestDriver, pattern testpatter
 		}
 
 		TestAccessMultipleVolumesAcrossPodRecreation(l.config.Framework, l.cs, l.ns.Name,
-			framework.NodeSelection{Name: l.config.ClientNodeName}, pvcs, true /* sameNode */)
+			e2epod.NodeSelection{Name: l.config.ClientNodeName}, pvcs, true /* sameNode */)
 	})
 
 	// This tests below configuration:
@@ -157,6 +162,9 @@ func (t *multiVolumeTestSuite) defineTests(driver TestDriver, pattern testpatter
 		defer cleanup()
 
 		// Check different-node test requirement
+		if l.driver.GetDriverInfo().Capabilities[CapSingleNodeVolume] {
+			framework.Skipf("Driver %s only supports %v -- skipping", l.driver.GetDriverInfo().Name, CapSingleNodeVolume)
+		}
 		nodes := framework.GetReadySchedulableNodesOrDie(l.cs)
 		if len(nodes.Items) < 2 {
 			framework.Skipf("Number of available nodes is less than 2 - skipping")
@@ -175,7 +183,7 @@ func (t *multiVolumeTestSuite) defineTests(driver TestDriver, pattern testpatter
 		}
 
 		TestAccessMultipleVolumesAcrossPodRecreation(l.config.Framework, l.cs, l.ns.Name,
-			framework.NodeSelection{Name: l.config.ClientNodeName}, pvcs, false /* sameNode */)
+			e2epod.NodeSelection{Name: l.config.ClientNodeName}, pvcs, false /* sameNode */)
 	})
 
 	// This tests below configuration (only <block, filesystem> pattern is tested):
@@ -213,7 +221,7 @@ func (t *multiVolumeTestSuite) defineTests(driver TestDriver, pattern testpatter
 		}
 
 		TestAccessMultipleVolumesAcrossPodRecreation(l.config.Framework, l.cs, l.ns.Name,
-			framework.NodeSelection{Name: l.config.ClientNodeName}, pvcs, true /* sameNode */)
+			e2epod.NodeSelection{Name: l.config.ClientNodeName}, pvcs, true /* sameNode */)
 	})
 
 	// This tests below configuration (only <block, filesystem> pattern is tested):
@@ -237,6 +245,9 @@ func (t *multiVolumeTestSuite) defineTests(driver TestDriver, pattern testpatter
 		defer cleanup()
 
 		// Check different-node test requirement
+		if l.driver.GetDriverInfo().Capabilities[CapSingleNodeVolume] {
+			framework.Skipf("Driver %s only supports %v -- skipping", l.driver.GetDriverInfo().Name, CapSingleNodeVolume)
+		}
 		nodes := framework.GetReadySchedulableNodesOrDie(l.cs)
 		if len(nodes.Items) < 2 {
 			framework.Skipf("Number of available nodes is less than 2 - skipping")
@@ -260,7 +271,7 @@ func (t *multiVolumeTestSuite) defineTests(driver TestDriver, pattern testpatter
 		}
 
 		TestAccessMultipleVolumesAcrossPodRecreation(l.config.Framework, l.cs, l.ns.Name,
-			framework.NodeSelection{Name: l.config.ClientNodeName}, pvcs, false /* sameNode */)
+			e2epod.NodeSelection{Name: l.config.ClientNodeName}, pvcs, false /* sameNode */)
 	})
 
 	// This tests below configuration:
@@ -284,7 +295,7 @@ func (t *multiVolumeTestSuite) defineTests(driver TestDriver, pattern testpatter
 
 		// Test access to the volume from pods on different node
 		TestConcurrentAccessToSingleVolume(l.config.Framework, l.cs, l.ns.Name,
-			framework.NodeSelection{Name: l.config.ClientNodeName}, resource.pvc, numPods, true /* sameNode */)
+			e2epod.NodeSelection{Name: l.config.ClientNodeName}, resource.pvc, numPods, true /* sameNode */)
 	})
 
 	// This tests below configuration:
@@ -317,20 +328,20 @@ func (t *multiVolumeTestSuite) defineTests(driver TestDriver, pattern testpatter
 
 		// Test access to the volume from pods on different node
 		TestConcurrentAccessToSingleVolume(l.config.Framework, l.cs, l.ns.Name,
-			framework.NodeSelection{Name: l.config.ClientNodeName}, resource.pvc, numPods, false /* sameNode */)
+			e2epod.NodeSelection{Name: l.config.ClientNodeName}, resource.pvc, numPods, false /* sameNode */)
 	})
 }
 
 // testAccessMultipleVolumes tests access to multiple volumes from single pod on the specified node
 // If readSeedBase > 0, read test are done before write/read test assuming that there is already data written.
 func testAccessMultipleVolumes(f *framework.Framework, cs clientset.Interface, ns string,
-	node framework.NodeSelection, pvcs []*v1.PersistentVolumeClaim, readSeedBase int64, writeSeedBase int64) string {
+	node e2epod.NodeSelection, pvcs []*v1.PersistentVolumeClaim, readSeedBase int64, writeSeedBase int64) string {
 	ginkgo.By(fmt.Sprintf("Creating pod on %+v with multiple volumes", node))
-	pod, err := framework.CreateSecPodWithNodeSelection(cs, ns, pvcs,
-		false, "", false, false, framework.SELinuxLabel,
+	pod, err := e2epod.CreateSecPodWithNodeSelection(cs, ns, pvcs, nil,
+		false, "", false, false, e2epv.SELinuxLabel,
 		nil, node, framework.PodStartTimeout)
 	defer func() {
-		framework.ExpectNoError(framework.DeletePodWithWait(f, cs, pod))
+		framework.ExpectNoError(e2epod.DeletePodWithWait(cs, pod))
 	}()
 	framework.ExpectNoError(err)
 
@@ -363,7 +374,7 @@ func testAccessMultipleVolumes(f *framework.Framework, cs clientset.Interface, n
 // then recreate pod on the same or different node depending on requiresSameNode,
 // and recheck access to the volumes from the recreated pod
 func TestAccessMultipleVolumesAcrossPodRecreation(f *framework.Framework, cs clientset.Interface, ns string,
-	node framework.NodeSelection, pvcs []*v1.PersistentVolumeClaim, requiresSameNode bool) {
+	node e2epod.NodeSelection, pvcs []*v1.PersistentVolumeClaim, requiresSameNode bool) {
 
 	// No data is written in volume, so passing negative value
 	readSeedBase := int64(-1)
@@ -373,11 +384,9 @@ func TestAccessMultipleVolumesAcrossPodRecreation(f *framework.Framework, cs cli
 
 	// Set affinity depending on requiresSameNode
 	if requiresSameNode {
-		framework.SetAffinity(&node, nodeName)
+		e2epod.SetAffinity(&node, nodeName)
 	} else {
-		// Do not put hard requirement on the anti-affinity. In some occasions there might exist only
-		// one available node for the pod scheduling (e.g., multi-AZ cluster with one node per AZ)
-		framework.SetAntiAffinityPreference(&node, nodeName)
+		e2epod.SetAntiAffinity(&node, nodeName)
 	}
 
 	// Test access to multiple volumes again on the node updated above
@@ -385,13 +394,7 @@ func TestAccessMultipleVolumesAcrossPodRecreation(f *framework.Framework, cs cli
 	readSeedBase = writeSeedBase
 	// Update writeSeed with new value
 	writeSeedBase = time.Now().UTC().UnixNano()
-	secondNodeName := testAccessMultipleVolumes(f, cs, ns, node, pvcs, readSeedBase, writeSeedBase)
-	if !requiresSameNode && (secondNodeName == nodeName) {
-		// The pod was created on the same node: presumably there was no other node available
-		// for the second pod scheduling -- this does not mean the test should fail. Skip it instead/
-		e2elog.Logf("Warning: The pod got scheduled on the same node despite requesting otherwise: skipping test")
-		framework.Skipf("No node available for the second pod found")
-	}
+	_ = testAccessMultipleVolumes(f, cs, ns, node, pvcs, readSeedBase, writeSeedBase)
 }
 
 // TestConcurrentAccessToSingleVolume tests access to a single volume from multiple pods,
@@ -399,43 +402,32 @@ func TestAccessMultipleVolumesAcrossPodRecreation(f *framework.Framework, cs cli
 // pod deletion doesn't affect. Pods are deployed on the same node or different nodes depending on requiresSameNode.
 // Read/write check are done across pod, by check reading both what pod{n-1} and pod{n} wrote from pod{n}.
 func TestConcurrentAccessToSingleVolume(f *framework.Framework, cs clientset.Interface, ns string,
-	node framework.NodeSelection, pvc *v1.PersistentVolumeClaim, numPods int, requiresSameNode bool) {
+	node e2epod.NodeSelection, pvc *v1.PersistentVolumeClaim, numPods int, requiresSameNode bool) {
 
 	var pods []*v1.Pod
 
-	firstNodeName := ""
 	// Create each pod with pvc
 	for i := 0; i < numPods; i++ {
 		index := i + 1
 		ginkgo.By(fmt.Sprintf("Creating pod%d with a volume on %+v", index, node))
-		pod, err := framework.CreateSecPodWithNodeSelection(cs, ns,
-			[]*v1.PersistentVolumeClaim{pvc},
-			false, "", false, false, framework.SELinuxLabel,
+		pod, err := e2epod.CreateSecPodWithNodeSelection(cs, ns,
+			[]*v1.PersistentVolumeClaim{pvc}, nil,
+			false, "", false, false, e2epv.SELinuxLabel,
 			nil, node, framework.PodStartTimeout)
 		defer func() {
-			framework.ExpectNoError(framework.DeletePodWithWait(f, cs, pod))
+			framework.ExpectNoError(e2epod.DeletePodWithWait(cs, pod))
 		}()
 		framework.ExpectNoError(err)
 		pod, err = cs.CoreV1().Pods(pod.Namespace).Get(pod.Name, metav1.GetOptions{})
 		pods = append(pods, pod)
 		framework.ExpectNoError(err, fmt.Sprintf("get pod%d", index))
 		actualNodeName := pod.Spec.NodeName
-		// Remember where the first pod was scheduled
-		if i == 0 {
-			firstNodeName = actualNodeName
-		}
-		// If the second pod got scheduled on the same node as the first one it means
-		// there was no available node for the second pod and the test should be skipped.
-		if !requiresSameNode && i == 1 && (actualNodeName == firstNodeName) {
-			e2elog.Logf("Warning: The pod got scheduled on the same node as the previous one: skipping test")
-			framework.Skipf("No node available for the second pod found")
-		}
 
 		// Set affinity depending on requiresSameNode
 		if requiresSameNode {
-			framework.SetAffinity(&node, actualNodeName)
+			e2epod.SetAffinity(&node, actualNodeName)
 		} else {
-			framework.SetAntiAffinityPreference(&node, actualNodeName)
+			e2epod.SetAntiAffinity(&node, actualNodeName)
 		}
 	}
 
@@ -466,10 +458,10 @@ func TestConcurrentAccessToSingleVolume(f *framework.Framework, cs clientset.Int
 
 	// Delete the last pod and remove from slice of pods
 	if len(pods) < 2 {
-		e2elog.Failf("Number of pods shouldn't be less than 2, but got %d", len(pods))
+		framework.Failf("Number of pods shouldn't be less than 2, but got %d", len(pods))
 	}
 	lastPod := pods[len(pods)-1]
-	framework.ExpectNoError(framework.DeletePodWithWait(f, cs, lastPod))
+	framework.ExpectNoError(e2epod.DeletePodWithWait(cs, lastPod))
 	pods = pods[:len(pods)-1]
 
 	// Recheck if pv can be accessed from each pod after the last pod deletion

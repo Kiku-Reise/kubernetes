@@ -38,6 +38,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 	cloudprovider "k8s.io/cloud-provider"
+	csitrans "k8s.io/csi-translation-lib"
 	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/controller/volume/persistentvolume/metrics"
 	pvutil "k8s.io/kubernetes/pkg/controller/volume/persistentvolume/util"
@@ -93,6 +94,7 @@ func NewController(p ControllerParameters) (*PersistentVolumeController, error) 
 		volumeQueue:                   workqueue.NewNamed("volumes"),
 		resyncPeriod:                  p.SyncPeriod,
 		operationTimestamps:           metrics.NewOperationStartTimeCache(),
+		translator:                    csitrans.New(),
 	}
 
 	// Prober is nil because PV is not aware of Flexvolume.
@@ -282,7 +284,7 @@ func (ctrl *PersistentVolumeController) Run(stopCh <-chan struct{}) {
 	klog.Infof("Starting persistent volume controller")
 	defer klog.Infof("Shutting down persistent volume controller")
 
-	if !controller.WaitForCacheSync("persistent volume", stopCh, ctrl.volumeListerSynced, ctrl.claimListerSynced, ctrl.classListerSynced, ctrl.podListerSynced, ctrl.NodeListerSynced) {
+	if !cache.WaitForNamedCacheSync("persistent volume", stopCh, ctrl.volumeListerSynced, ctrl.claimListerSynced, ctrl.classListerSynced, ctrl.podListerSynced, ctrl.NodeListerSynced) {
 		return
 	}
 

@@ -25,8 +25,9 @@ import (
 	"os"
 	goruntime "runtime"
 
+	"github.com/spf13/cobra"
+
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
@@ -40,22 +41,21 @@ import (
 	"k8s.io/client-go/tools/leaderelection"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/cli/globalflag"
+	"k8s.io/component-base/metrics/legacyregistry"
+	"k8s.io/component-base/version"
+	"k8s.io/component-base/version/verflag"
+	"k8s.io/klog"
 	schedulerserverconfig "k8s.io/kubernetes/cmd/kube-scheduler/app/config"
 	"k8s.io/kubernetes/cmd/kube-scheduler/app/options"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	"k8s.io/kubernetes/pkg/scheduler"
 	"k8s.io/kubernetes/pkg/scheduler/algorithmprovider"
 	kubeschedulerconfig "k8s.io/kubernetes/pkg/scheduler/apis/config"
+	plugins "k8s.io/kubernetes/pkg/scheduler/framework/plugins"
 	framework "k8s.io/kubernetes/pkg/scheduler/framework/v1alpha1"
 	"k8s.io/kubernetes/pkg/scheduler/metrics"
 	"k8s.io/kubernetes/pkg/util/configz"
 	utilflag "k8s.io/kubernetes/pkg/util/flag"
-	"k8s.io/kubernetes/pkg/version"
-	"k8s.io/kubernetes/pkg/version/verflag"
-
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/spf13/cobra"
-	"k8s.io/klog"
 )
 
 // Option configures a framework.Registry.
@@ -140,9 +140,6 @@ func runCommand(cmd *cobra.Command, args []string, opts *options.Options, regist
 	// Get the completed config
 	cc := c.Complete()
 
-	// To help debugging, immediately log version
-	klog.Infof("Version: %+v", version.Get())
-
 	// Apply algorithms based on feature gates.
 	// TODO: make configurable?
 	algorithmprovider.ApplyFeatureGates()
@@ -162,7 +159,7 @@ func Run(cc schedulerserverconfig.CompletedConfig, stopCh <-chan struct{}, regis
 	// To help debugging, immediately log version
 	klog.V(1).Infof("Starting Kubernetes Scheduler version %+v", version.Get())
 
-	registry := framework.NewRegistry()
+	registry := plugins.NewDefaultRegistry()
 	for _, option := range registryOptions {
 		if err := option(registry); err != nil {
 			return err
@@ -185,14 +182,15 @@ func Run(cc schedulerserverconfig.CompletedConfig, stopCh <-chan struct{}, regis
 		cc.Recorder,
 		cc.ComponentConfig.AlgorithmSource,
 		stopCh,
-		registry,
-		cc.ComponentConfig.Plugins,
-		cc.ComponentConfig.PluginConfig,
 		scheduler.WithName(cc.ComponentConfig.SchedulerName),
 		scheduler.WithHardPodAffinitySymmetricWeight(cc.ComponentConfig.HardPodAffinitySymmetricWeight),
 		scheduler.WithPreemptionDisabled(cc.ComponentConfig.DisablePreemption),
 		scheduler.WithPercentageOfNodesToScore(cc.ComponentConfig.PercentageOfNodesToScore),
-		scheduler.WithBindTimeoutSeconds(*cc.ComponentConfig.BindTimeoutSeconds))
+		scheduler.WithBindTimeoutSeconds(*cc.ComponentConfig.BindTimeoutSeconds),
+		scheduler.WithFrameworkRegistry(registry),
+		scheduler.WithFrameworkPlugins(cc.ComponentConfig.Plugins),
+		scheduler.WithFrameworkPluginConfig(cc.ComponentConfig.PluginConfig),
+	)
 	if err != nil {
 		return err
 	}
@@ -205,7 +203,7 @@ func Run(cc schedulerserverconfig.CompletedConfig, stopCh <-chan struct{}, regis
 		cc.LeaderElectionBroadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: cc.CoreEventClient.Events("")})
 	}
 	// Setup healthz checks.
-	var checks []healthz.HealthzChecker
+	var checks []healthz.HealthChecker
 	if cc.ComponentConfig.LeaderElection.LeaderElect {
 		checks = append(checks, cc.LeaderElection.WatchDog)
 	}
@@ -262,7 +260,7 @@ func Run(cc schedulerserverconfig.CompletedConfig, stopCh <-chan struct{}, regis
 		cc.LeaderElection.Callbacks = leaderelection.LeaderCallbacks{
 			OnStartedLeading: run,
 			OnStoppedLeading: func() {
-				utilruntime.HandleError(fmt.Errorf("lost master"))
+				klog.Fatalf("leaderelection lost")
 			},
 		}
 		leaderElector, err := leaderelection.NewLeaderElector(*cc.LeaderElection)
@@ -288,6 +286,7 @@ func buildHandlerChain(handler http.Handler, authn authenticator.Request, authz 
 	handler = genericapifilters.WithAuthorization(handler, authz, legacyscheme.Codecs)
 	handler = genericapifilters.WithAuthentication(handler, authn, failedHandler, nil)
 	handler = genericapifilters.WithRequestInfo(handler, requestInfoResolver)
+	handler = genericapifilters.WithCacheControl(handler)
 	handler = genericfilters.WithPanicRecovery(handler)
 
 	return handler
@@ -295,10 +294,13 @@ func buildHandlerChain(handler http.Handler, authn authenticator.Request, authz 
 
 func installMetricHandler(pathRecorderMux *mux.PathRecorderMux) {
 	configz.InstallHandler(pathRecorderMux)
-	defaultMetricsHandler := prometheus.Handler().ServeHTTP
+	//lint:ignore SA1019 See the Metrics Stability Migration KEP
+	defaultMetricsHandler := legacyregistry.Handler().ServeHTTP
 	pathRecorderMux.HandleFunc("/metrics", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == "DELETE" {
 			metrics.Reset()
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.Header().Set("X-Content-Type-Options", "nosniff")
 			io.WriteString(w, "metrics reset\n")
 			return
 		}
@@ -322,7 +324,7 @@ func newMetricsHandler(config *kubeschedulerconfig.KubeSchedulerConfiguration) h
 // newHealthzHandler creates a healthz server from the config, and will also
 // embed the metrics handler if the healthz and metrics address configurations
 // are the same.
-func newHealthzHandler(config *kubeschedulerconfig.KubeSchedulerConfiguration, separateMetrics bool, checks ...healthz.HealthzChecker) http.Handler {
+func newHealthzHandler(config *kubeschedulerconfig.KubeSchedulerConfiguration, separateMetrics bool, checks ...healthz.HealthChecker) http.Handler {
 	pathRecorderMux := mux.NewPathRecorderMux("kube-scheduler")
 	healthz.InstallHandler(pathRecorderMux, checks...)
 	if !separateMetrics {

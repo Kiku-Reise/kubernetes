@@ -138,6 +138,11 @@ if [[ "${KUBE_FEATURE_GATES:-}" == "AllAlpha=true" ]]; then
   RUNTIME_CONFIG="${KUBE_RUNTIME_CONFIG:-api/all=true}"
 fi
 
+# If feature gates includes AllAlpha or EndpointSlice, and EndpointSlice has not been disabled, add EndpointSlice controller to list of controllers to run.
+if [[ (( "${KUBE_FEATURE_GATES:-}" == *"AllAlpha=true"* ) || ( "${KUBE_FEATURE_GATES:-}" == *"EndpointSlice=true"* )) && "${KUBE_FEATURE_GATES:-}" != *"EndpointSlice=false"* ]]; then
+  RUN_CONTROLLERS="${RUN_CONTROLLERS:-*,endpointslice}"
+fi
+
 # Optional: set feature gates
 FEATURE_GATES="${KUBE_FEATURE_GATES:-}"
 
@@ -187,7 +192,14 @@ ENABLE_METADATA_AGENT="${KUBE_ENABLE_METADATA_AGENT:-none}"
 # Useful for scheduling heapster in large clusters with nodes of small size.
 HEAPSTER_MACHINE_TYPE="${HEAPSTER_MACHINE_TYPE:-}"
 
-# Set etcd image (e.g. k8s.gcr.io/etcd) and version (e.g. 3.3.10-1) if you need
+# Optional: Additional nodes would be created if their type and number is specified.
+# NUM_NODES would be lowered respectively.
+# Useful for running cluster-level addons that needs more resources than would fit
+# on small nodes, like network plugins.
+NUM_ADDITIONAL_NODES="${NUM_ADDITIONAL_NODES:-}"
+ADDITIONAL_MACHINE_TYPE="${ADDITIONAL_MACHINE_TYPE:-}"
+
+# Set etcd image (e.g. k8s.gcr.io/etcd) and version (e.g. 3.3.15-0) if you need
 # non-default version.
 ETCD_IMAGE="${TEST_ETCD_IMAGE:-}"
 ETCD_DOCKER_REPOSITORY="${TEST_ETCD_DOCKER_REPOSITORY:-}"
@@ -387,7 +399,7 @@ fi
 CUSTOM_INGRESS_YAML="${CUSTOM_INGRESS_YAML:-}"
 
 if [[ -z "${KUBE_ADMISSION_CONTROL:-}" ]]; then
-  ADMISSION_CONTROL="NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeLabel,PodPreset,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,Priority,StorageObjectInUseProtection,PersistentVolumeClaimResize"
+  ADMISSION_CONTROL="NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeLabel,PodPreset,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,Priority,StorageObjectInUseProtection,PersistentVolumeClaimResize,RuntimeClass"
   if [[ "${ENABLE_POD_SECURITY_POLICY:-}" == "true" ]]; then
     ADMISSION_CONTROL="${ADMISSION_CONTROL},PodSecurityPolicy"
   fi
@@ -464,7 +476,7 @@ fi
 # Fluentd requirements
 # YAML exists to trigger a configuration refresh when changes are made.
 FLUENTD_GCP_YAML_VERSION="v3.2.0"
-FLUENTD_GCP_VERSION="${FLUENTD_GCP_VERSION:-1.6.8}"
+FLUENTD_GCP_VERSION="${FLUENTD_GCP_VERSION:-1.6.17}"
 FLUENTD_GCP_MEMORY_LIMIT="${FLUENTD_GCP_MEMORY_LIMIT:-}"
 FLUENTD_GCP_CPU_REQUEST="${FLUENTD_GCP_CPU_REQUEST:-}"
 FLUENTD_GCP_MEMORY_REQUEST="${FLUENTD_GCP_MEMORY_REQUEST:-}"

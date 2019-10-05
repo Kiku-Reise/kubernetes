@@ -26,10 +26,10 @@ set -o pipefail
 ### Hardcoded constants
 DEFAULT_CNI_VERSION="v0.7.5"
 DEFAULT_CNI_SHA1="52e9d2de8a5f927307d9397308735658ee44ab8d"
-DEFAULT_NPD_VERSION="v0.6.3"
-DEFAULT_NPD_SHA1="3a6ac56be6c121f1b94450bfd1a81ad28d532369"
-DEFAULT_CRICTL_VERSION="v1.14.0"
-DEFAULT_CRICTL_SHA1="1f93c6183d0a4e186708efe7899da7a7bce9c736"
+DEFAULT_NPD_VERSION="v0.7.1"
+DEFAULT_NPD_SHA1="a9cae965973d586bf5206ad4fe5aae07e6bfd154"
+DEFAULT_CRICTL_VERSION="v1.16.1"
+DEFAULT_CRICTL_SHA1="8d7b788bf0a52bd3248407c6ebf779ffead27c99"
 DEFAULT_MOUNTER_TAR_SHA="8003b798cf33c7f91320cd6ee5cec4fa22244571"
 ###
 
@@ -126,12 +126,12 @@ function validate-hash {
 # Get default service account credentials of the VM.
 GCE_METADATA_INTERNAL="http://metadata.google.internal/computeMetadata/v1/instance"
 function get-credentials {
-  curl "${GCE_METADATA_INTERNAL}/service-accounts/default/token" -H "Metadata-Flavor: Google" -s | python -c \
+  curl --fail --retry 5 --retry-delay 3 ${CURL_RETRY_CONNREFUSED} --silent --show-error "${GCE_METADATA_INTERNAL}/service-accounts/default/token" -H "Metadata-Flavor: Google" -s | python -c \
     'import sys; import json; print(json.loads(sys.stdin.read())["access_token"])'
 }
 
 function valid-storage-scope {
-  curl "${GCE_METADATA_INTERNAL}/service-accounts/default/scopes" -H "Metadata-Flavor: Google" -s | grep -q "auth/devstorage"
+  curl --fail --retry 5 --retry-delay 3 ${CURL_RETRY_CONNREFUSED} --silent --show-error "${GCE_METADATA_INTERNAL}/service-accounts/default/scopes" -H "Metadata-Flavor: Google" -s | grep -E "auth/devstorage|auth/cloud-platform"
 }
 
 # Retry a download until we get it. Takes a hash and a set of URLs.
@@ -381,15 +381,6 @@ function load-docker-images {
   else
     try-load-docker-image "${img_dir}/kube-proxy.tar"
   fi
-  # When we load from a docker archive, the image is tagged with the arch, we don't have docker manifests here.
-  # The resource manifest is expecting something like 'registry/kube-controller-manager:v1.2.3', no arch specified.
-  local -r images=$(docker images --format "{{.Repository}}:{{.Tag}}" | egrep 'kube-apiserver|kube-controller-manager|kube-scheduler|kube-proxy' | grep amd64)
-  for image in $images ; do
-    local manifest_name="${image/-amd64/}"
-    if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q ${manifest_name} ; then
-      docker tag $image $manifest_name
-    fi
-  done
 }
 
 # Downloads kubernetes binaries and kube-system manifest tarball, unpacks them,
